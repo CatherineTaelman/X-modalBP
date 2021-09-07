@@ -16,7 +16,7 @@ For questions or suggestions: cta014@uit.no
 
 dataset = 'Trento' # choose from ['Trento', 'Houston']
 choice = 'full overlap' # choose from ['full overlap', 'hyperspectral', 'lidar']
-
+realDataDir = '/work/cta014/data' #specify path to directory containing the data sets
 # -------------------------------------------------------------
 
 import numpy as np
@@ -33,12 +33,10 @@ from numpy import linalg as LA
 from sklearn.metrics import cohen_kappa_score
 from generateFolds import generateFoldDictionary
 
-sys.path.append('./../sslh')
 from os.path import abspath, dirname, join
 from inspect import getfile, currentframe
 current_path = dirname(abspath(getfile(currentframe())))
-figure_directory = join(current_path, 'figs')
-realDataDir = join(current_path, 'realData')
+
 
 """     PARAMETERS for main_LP:
 
@@ -377,7 +375,7 @@ def main_LP(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_spa, r, cho
 
 ## either load folds from pickle file (uncomment first line), or create them on the spot using the function generateFoldDictionary
 #folds = pickle.load(open('folds_'+dataset+'.pickle', 'rb'))
-folds = generateFoldDictionary(dataset, nr_folds, useFeatures=False)
+folds = generateFoldDictionary(dataset, nr_folds, realDataDir, useFeatures=False)
 testFolds = folds['test']
 nr_folds = folds['nr_folds']
 dimHS = folds['dimHS'] # spectral dimension of hyperspectral image

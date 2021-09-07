@@ -49,9 +49,9 @@ from read_write_img import get_all_bands
 from os.path import abspath, dirname, join
 from inspect import getfile, currentframe
 current_path = dirname(abspath(getfile(currentframe())))
-realDataDir = '/work/cta014/data'
+#realDataDir = '/work/cta014/data'
 
-def loadData(dataset, useFeatures=False):
+def loadData(dataset, realDataDir, useFeatures=False):
 # returns labelled pixels including their spatial coordinates (X_total) with corresponding ground truth (y_total)
 # also returns spectral dimension of the hyperspectral and lidar data (dimHS & dimLidar)
 # if useFeatures=True, then method will add LiDAR-extracted features (from GLCM) to original LiDAR image and use
@@ -203,10 +203,10 @@ def generateKFolds(X, y, nr_folds, useFeatures = False):
         test.append(y_test)
     return train, test
 
-def generateFoldDictionary(dataset, nr_folds, useFeatures=False):
+def generateFoldDictionary(dataset, nr_folds, realDataDir, useFeatures=False):
 # returns a dictionary called 'folds' containing: labelled pixels including their spatial coordinates (X_total),
 # lists of train and test folds, amount of folds (nr_folds), dimHS and dimLidar
-    X_total, y_total , dimHS, dimLidar = loadData(dataset, useFeatures)
+    X_total, y_total , dimHS, dimLidar = loadData(dataset, realDataDir, useFeatures)
     train, test = generateKFolds(X_total, y_total, nr_folds)
     folds = {'X_total': X_total, 'train':train, 'test':test, 'nr_folds': nr_folds, 'dimHS': dimHS, 'dimLidar': dimLidar}
     return folds
