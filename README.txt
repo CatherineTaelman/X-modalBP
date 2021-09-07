@@ -22,9 +22,16 @@ the test set is split into k folds (for Trento and Houston 6 folds is used), in 
 in order to maintain class (dis)balances like in the original test set. Next, the main_LP method is run on each subfold to obtain classification
 of the entire test set.
 
-User should input:
+HOW TO RUN IT:
+1) Create virtual environment
+2) Activate the virtual environment and install the following packages:
+numpy, matplotlib, scikit-learn, scikit-image, tifffile, loguru, gdal
+3) Create a seperate directory called e.g. 'data' with subdirectories 'Trento' and 'Houston', which contain the Trento and Houston data sets, respectively.
+The path to this directory will be added in 'main.py' 
+4) Complete required user-input in 'main.py':
     1)  dataset to use, choose from ['Trento','Houston']
     2) 'choice': which case to run (case 1: 'full overlap', case 2: 'hyperspectral' or 'lidar')
+    3)  realDataDir: specify path to data directory created in step 3)
 
 Author: Catherine Taelman
 June 2021
