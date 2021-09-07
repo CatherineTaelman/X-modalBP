@@ -1,0 +1,31 @@
+LABEL PROPAGATION ALGORITHM FOR MULTIMODAL REMOTE SENSING DATA
+
+Graph-based label propagation algorithm implemented on 2 datasets: Trento & Houston 2013. Both datasets contain overlapping 
+hyperspectral + LiDAR images. For more info on these datasets, see my paper.
+
+Two cases are distinghuised:
+	Case 1: Images are fully overlapping --> homogeneous graph with one node and one edge type.
+	This case is referred to as 'full overlap'.
+
+	Case 2: Images are NOT fully overlapping (this is synthetically generated) --> heterogeneous graph with 2 node types and 3 edge types. 
+	This case is referred to as 'hyperspectral' or 'lidar', depending on the type of modality that is found in the non-overlapping region.
+
+The 5 hyperparameters (kNN, ep, sig_spe, sig_spa and r) are tuned via a random search using k-fold cross validation on the training set.
+This happens in 'randomSearchCV_*dataset*.py' and 'validationRandomSearch_*dataset*.py', where *dataset* is 'Trento' or 'Houston'.
+The optimal hyperparameters are then stored in 'optimal_rs_*dataset*.pickle' .
+'main.py' runs label propagation on the test set, using the optimal hyperparameters.
+
+Due to scalability issues, the original test set is divided into subsets (folds) and label prop. is run on the 
+different subfolds to obtain a label for each sample in the test set.
+The subfolds are created via the function 'generateFoldDictionary' (imported from 'generateFolds.py') which works as follows:
+the test set is split into k folds (for Trento and Houston 6 folds is used), in a stratified fashion
+in order to maintain class (dis)balances like in the original test set. Next, the main_LP method is run on each subfold to obtain classification
+of the entire test set.
+
+User should input:
+    1)  dataset to use, choose from ['Trento','Houston']
+    2) 'choice': which case to run (case 1: 'full overlap', case 2: 'hyperspectral' or 'lidar')
+
+Author: Catherine Taelman
+June 2021
+For questions or suggestions: cta014@uit.no
