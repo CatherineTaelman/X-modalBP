@@ -32,6 +32,8 @@ The path to this directory will be added in 'main.py'
     1)  dataset to use, choose from ['Trento','Houston']
     2) 'choice': which case to run (case 1: 'full overlap', case 2: 'hyperspectral' or 'lidar')
     3)  realDataDir: specify path to data directory created in step 3)
+    
+5) Run label propagation in the command line by using: python main.py 
 
 Author: Catherine Taelman
 June 2021
