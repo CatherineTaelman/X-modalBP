@@ -1,7 +1,7 @@
 LABEL PROPAGATION ALGORITHM FOR MULTIMODAL REMOTE SENSING DATA
 
 Graph-based label propagation algorithm implemented on 2 datasets: Trento & Houston 2013. Both datasets contain overlapping 
-hyperspectral + LiDAR images. For more info on these datasets, see my paper.
+hyperspectral + LiDAR images. For more info on these datasets, see readme files in datasets folder, or see my report.
 
 Two cases are distinghuised:
 	Case 1: Images are fully overlapping --> homogeneous graph with one node and one edge type.
