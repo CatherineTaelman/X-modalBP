@@ -1,10 +1,10 @@
 """
 MULTIMODAL LABEL PROPAGATION ALGORITHM FOR REMOTE SENSING DATA
-More info in README file.
 
 User should input:
-    1)  dataset to use ('Trento' or 'Houston')
+    1)  dataset to use: 'Trento' or 'Houston'
     2) 'choice': which case to run (case 1: 'full overlap', case 2: 'hyperspectral' or 'lidar')
+    3)  realDataDir: path the directory with data sets
 
 Author: Catherine Taelman
 June 2021
