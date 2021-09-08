@@ -2,6 +2,7 @@
 
 """
 Read and write image files using gdal.
+Author: Johannes Lohse
 """
 
 import os
