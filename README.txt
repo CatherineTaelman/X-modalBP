@@ -1,7 +1,8 @@
-LABEL PROPAGATION ALGORITHM FOR MULTIMODAL REMOTE SENSING DATA
+# Graph-based label propagation for multimodal remote sensing data
 
-Graph-based label propagation algorithm implemented on 2 datasets: Trento & Houston 2013. Both datasets contain overlapping 
-hyperspectral + LiDAR images. For more info on these datasets, see readme files in datasets folder, or see my report.
+Label propagation algorithm that supports heterogeneous data and includes homophily and/or heterophily during propagation.
+Here implemented on 2 multimodal remote sensing data sets: Trento & Houston 2013. Both datasets contain overlapping hyperspectral + LiDAR images.
+The algorithm outputs a label prediction for each pixel in the input image(s).
 
 Two cases are distinghuised:
 	Case 1: Images are fully overlapping --> homogeneous graph with one node and one edge type.
@@ -22,8 +23,8 @@ the test set is split into k folds (for Trento and Houston 6 folds is used), in 
 in order to maintain class (dis)balances like in the original test set. Next, the main_LP method is run on each subfold to obtain classification
 of the entire test set.
 
-HOW TO RUN IT:
-1) Create virtual environment
+## Installation and usage
+1) Create virtual environment (e.g. X-modalBP)
 2) Activate the virtual environment and install the following packages:
 numpy, matplotlib, scikit-learn, scikit-image, tifffile, loguru, gdal
 3) Create a seperate directory called e.g. 'data' with subdirectories 'Trento' and 'Houston', which contain the Trento and Houston data sets, respectively.
