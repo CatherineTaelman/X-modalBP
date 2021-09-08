@@ -31,7 +31,7 @@ Installation
     * gdal
 3)  Create a seperate directory called e.g. 'data' with subdirectories
     'Trento' and 'Houston', which contain the Trento and Houston data
-    sets, respectively. The path to this directory needs to be added in
+    sets, respectively. The path to the 'data' directory needs to be added in
     main.py (see Usage).
     
 Usage
