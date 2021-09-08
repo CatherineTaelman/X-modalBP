@@ -35,7 +35,7 @@ entire test set.
 
 Installation
 ----------------------
-1)  Create a virtual environment (e.g. X-modalBP) with python>=3.6
+1)  Create a virtual environment (e.g. X-modalBP) with python>=3.7
 2)  Activate the virtual environment and install the following packages:
     * numpy
     * matplotlib
