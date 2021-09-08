@@ -20,7 +20,7 @@ This file contains the following functions:
 
        This method is created to deal with the scalability issue encountered during label propagation.
        Too large data sets must be split into k folds, which are then processed one-by-one by the label prop. method.
-       Required amount of folds (nr_folds) depends on size of data set. For Trento and Houston data sets nr_folds=6 folds is used.
+       Required amount of folds (nr_folds) depends on the available computational power. For Trento and Houston data sets nr_folds=6 folds is used here.
 
 Author: Catherine Taelman
 June 2021
