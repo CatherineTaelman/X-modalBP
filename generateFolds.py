@@ -1,6 +1,6 @@
 """
 This file contains the following functions:
-    1) loadData(dataset, useFeatures)
+    1) loadData(dataset, realDataDir, useFeatures)
        Loads dataset (including extra features if useFeatures=True).
        Returns X_total:  labelled image pixels, including their spatial coordinates
                          (last two entries in spectral dimension are the spatial coordinates)
@@ -14,17 +14,17 @@ This file contains the following functions:
        Returns train: list containing the k different train subsets
                test:  list containing the k different test subsets
                
-    3) generateFoldDictionary(dataset, nr_folds, useFeatures):
+    3) generateFoldDictionary(dataset, nr_folds, realDataDir, useFeatures):
        Calls the functions loadData and generateKFolds and collects the output in a dictionary 'folds'.
        Returns folds: a dictionary with the following keys: 'X_total', 'train', 'test', 'nr_folds', 'dimHS', 'dimLidar'. 
 
        This method is created to deal with the scalability issue encountered during label propagation.
        Too large data sets must be split into k folds, which are then processed one-by-one by the label prop. method.
-       Required amount of folds (nr_folds) depends on the available computational power. For Trento and Houston data sets nr_folds=6 folds is used here.
+       Required amount of folds (nr_folds) depends on size of data set. For Trento and Houston data sets nr_folds=6 folds is used.
 
 Author: Catherine Taelman
 June 2021
-For questions or suggestions: taelman.catherine@gmail.com
+
 """
 import numpy as np
 import tifffile
