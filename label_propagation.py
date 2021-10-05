@@ -24,16 +24,26 @@ import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 18})
 from sklearn.metrics import accuracy_score, confusion_matrix
 from scipy.sparse import csr_matrix
+from scipy.sparse import lil_matrix
 from sklearn.metrics import pairwise
 from LCE import estimateH
 from LCE_singleH import estimateSingleH
 from numpy import linalg as LA
 from sklearn.metrics import cohen_kappa_score
+import time
+from scipy import sparse
+from memory_profiler import profile
+from scipy.sparse import diags
+from sys import getsizeof
 
-
-def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_spa, r, choice, fraction=0.8):
+  
+# @profile
+def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_spa, r, choice, fraction=0.8,):
     assert len(X) == len(y), 'X and y must have same length'
     
+    verbose=False # Set to True for time stamps
+
+#%% Split data coords vs rest. Define GT
     if choice != 'full overlap':
         split = round(len(X)* 3/4) # take 3/4rd of data for overlapping part, one quarter for non-overlapping
         X_overlap = X[0:split,:-2] # take first 3/4rd of (labelled) pixels for combi set
@@ -82,41 +92,62 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
     # set fraction of pixels to label 0 (meaning unlabelled), default fraction = 0.8
     gt_adjusted = np.copy(y)
     indices = np.random.choice(np.arange(gt_adjusted.size), replace=False,
-                               size=int(gt_adjusted.size * fraction))
+                                size=int(gt_adjusted.size * fraction))
     gt_adjusted[indices] = 0
-    
+#%%     If statement    
     if choice != 'full overlap':
         gt_adjusted_combi = gt_adjusted[0:split] #ground truth for combi data (overlapping region)
         gt_adjusted_nonOverlap = gt_adjusted[split:] # ground truth for lidar data OR for HS data in non-overlapping region
-    
         # construct weigted adjacency matrices W1, W2 and W3 
         # W1 and W2 are constructed using spectral-spatial similarity metric of Shi&Malik
-        S = len(X_overlap)
-        W1 = np.zeros((S,S))
-        for i in range (0,S):
-            for j in range (i,S):
-                normspe = LA.norm(X_overlap[i] - X_overlap[j])
-                normspa = (LA.norm(X_overlap_coords[i] - X_overlap_coords[j]))
-                
-                if normspa < r:
-                    W1[i,j] = np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa**2/(sig_spa**2)))
-                    W1[j,i] = W1[i,j]
-                               
+
+#%%     Init W1             
+        S = len(X_overlap)     
+        W1=lil_matrix((S,S))
+        start = time.time()
+        for i in range(0,S):
+            normspa = np.sum(np.abs(X_overlap_coords[i] - X_overlap_coords[i:])**2,axis=1)**(1./2)
+            idx=np.where(normspa<r)[0]+i
+            
+            normspe = np.sum(np.abs(X_overlap[i] - X_overlap[idx,:])**2,axis=1)**(1./2)
+            
+            w_temp=np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa[idx-i]**2/(sig_spa**2)))
+            W1[i,idx]=w_temp
+
+        W1=W1.tocsr()
+        W1=W1+W1.transpose()-diags(W1.diagonal())
+        
+        if verbose==True:
+            print("Method took: {:.3f}".format(time.time()-start) + " seconds for initialization of W1")
+            print("")                
+#%%     Init W2 Non overlap
+        start = time.time()
         S = len(X)-split
-        W2 = np.zeros((S,S))
-        for i in range (0,S):
-            for j in range (i,S):
-                if choice == 'hyperspectral':
-                    normspe = LA.norm(X_hyper[i] - X_hyper[j])
-                    normspa = (LA.norm(nonOverlap_hyper_coords[i] - nonOverlap_hyper_coords[j]))
-                elif choice == 'lidar':
-                    normspe = LA.norm(X_lidar[i] - X_lidar[j])
-                    normspa = (LA.norm(nonOverlap_lidar_coords[i] - nonOverlap_lidar_coords[j]))
-                if normspa < r:
-                    W2[i,j] = np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa**2/(sig_spa**2)))
-                    W2[j,i] = W2[i,j]
-                    
+        W2=lil_matrix((S,S))
+        
+        for i in range(0,S):
+            if choice == 'hyperspectral':
+                normspa = np.sum(np.abs(nonOverlap_hyper_coords[i] - nonOverlap_hyper_coords[i:])**2,axis=1)**(1./2)
+                idx=np.where(normspa<r)[0]+i
+                normspe = np.sum(np.abs(X_hyper[i] - X_hyper[idx,:])**2,axis=1)**(1./2)
+            elif choice == 'lidar': 
+                normspa = np.sum(np.abs(nonOverlap_lidar_coords[i] - nonOverlap_lidar_coords[i:])**2,axis=1)**(1./2)
+                idx=np.where(normspa<r)[0]+i
+                normspe = np.sum(np.abs(X_lidar[i] - X_lidar[idx,:])**2,axis=1)**(1./2)
+                
+
+            w_temp=np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa[idx-i]**2/(sig_spa**2)))
+            W2[i,idx]=w_temp
+       
+        W2=W2.tocsr()
+        W2=W2+W2.transpose()-diags(W2.diagonal())
+        
+        if verbose==True:
+            print("Method took: {:.3f}".format(time.time()-start) + " seconds for initialization of W2")
+            print("")
+#%%     Init W3 Non overlap:
         # W3 is constructed using Gaussian kernel (spectral similarity) and kNN
+        start=time.time()
         metric = pairwise.rbf_kernel(X_overlap, nonOverlap_padded, gamma=sig_spe) # Gaussian kernel
         sim = np.argsort(-metric, axis=1)
         mask = np.zeros(metric.shape)
@@ -125,33 +156,47 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
             mask_row[ind_row] = 1
         W3 = metric.copy()
         W3[mask==0] = 0
+        W3=csr_matrix(W3)
+        
+        if verbose==True:
+            print("Method took: {:.3f}".format(time.time()-start) + " seconds for initialization of W3")
+            print("------------------------------------------------------------------------")
         
         gtTypes= [gt_adjusted_combi, gt_adjusted_nonOverlap]
         classes = [k, k]
         
         N1 = gt_adjusted_combi.shape[0] # amount of nodes of type 1
         N2 = gt_adjusted_nonOverlap.shape[0] # amount of nodes of type 2
-        nodes = [N1,N2]
-        
+        nodes = [N1,N2]          
+#%%     If statement     
     else:
-    # in case of full overlap there is just a single affinity matrix W (computed with spectral-spatial similarity)
-        S = len(X_overlap)
-        W = np.zeros((S,S))
-        for i in range (0,S):
-            for j in range (i,S):
-                normspe = LA.norm(X_overlap[i] - X_overlap[j])
-                normspa = (LA.norm(X_overlap_coords[i] - X_overlap_coords[j]))
-                
-                if normspa < r:
-                    W[i,j] = np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa**2/(sig_spa**2)))
-                    W[j,i] = W[i,j]
-                    
+
+#%%     Init W full overlap
+        S = len(X_overlap)           
+        W=lil_matrix((S,S))
+        start = time.time()
+        for i in range(0,S):
+            normspa = np.sum(np.abs(X_overlap_coords[i] - X_overlap_coords[i:])**2,axis=1)**(1./2)
+            idx=np.where(normspa<r)[0]+i
+            
+            normspe = np.sum(np.abs(X_overlap[i] - X_overlap[idx,:])**2,axis=1)**(1./2)
+            
+            w_temp=np.exp(-(normspe**2/(sig_spe**2)))*np.exp(-(normspa[idx-i]**2/(sig_spa**2)))
+            W[i,idx]=w_temp
+            
+
+        W=W.tocsr()
+        W=W+W.transpose()-diags(W.diagonal())
+        if verbose==True:
+            print("Method took: {:.3f}".format(time.time()-start) + " seconds for initialization of W")
+            print("------------------------------------------------------------------------")
+            
         gtTypes= [gt_adjusted] 
-        classes = [k , k]  
+        classes = [k , k]
         
         N = gt_adjusted.shape[0] # amount of nodes
         nodes = [N]
-                    
+#%%     Construct prior belief and initialize final belief:     
     # construct prior belief vector e: 3 steps
     E_total=[]
     for t, c in zip(gtTypes, classes):
@@ -159,7 +204,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         E = np.zeros([len(t), c])
         for i in range(len(t)):
             if t[i] != 0:
-                pos = t[i] - 1
+                pos = int(t[i] - 1)
                 E[i,pos] = c*0.001
                 
         # step 2: for labeled nodes, initiate prior as k*0.001 for right class and -0.001 for wrong class       
@@ -192,131 +237,143 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         b = np.reshape(B, (B.shape[0]*B.shape[1],1))
     b = np.reshape(b, (b.shape[0],1)) 
     #print('check if b is residual (0-centered): average value is:', np.mean(b))
-    
+ 
+#%%     If statement
     if choice != 'full overlap':
+
+#%%     Calculate E, W, H, P and Q for non overlap
         E1 = E_total[0]
         E2 = E_total[1]
-        Eupper = np.concatenate((E1,csr_matrix(np.shape(E1)).toarray()),axis=1)
-        Elower = np.concatenate((csr_matrix(np.shape(E2)).toarray(),E2),axis=1)
+        
+        Eupper = np.concatenate((E1,np.zeros_like(E1)),axis=1)
+        Elower = np.concatenate((np.zeros_like(E2),E2),axis=1)
         E_tot = np.concatenate((Eupper,Elower),axis=0)
         
-        Wupper = np.concatenate((W1,W3), axis=1)
-        Wlower = np.concatenate((np.transpose(W3),W2), axis=1)
-        W_tot = np.concatenate((Wupper,Wlower),axis=0)
-        
-        # estimate potential matrices H via Linear Compatibility Estimation (LCE)
-        # H1: combi-combi, H2: Lidar-lidar, H3: combi-lidar edges
-        H_total = estimateH(E=E_tot, W=W_tot, k=k, method='LHE')
-        H1 = np.transpose(H_total[0:k,0:k])
-        H2 = np.transpose(H_total[k:,k:])
-        H3 = H_total[0:k,k:]
-        
-        # construct P (for 2 node types and 3 edges types)
-        P11 = (ep/k) * (np.kron(W1,H1))
-        P12 = (ep/k) * (np.kron(W3,H3))
-        P21 = (ep/k) * (np.kron(np.transpose(W3),np.transpose(H3)))
-        P22 = (ep/k) * (np.kron(W2,H2))
-        
-        Pupper = np.concatenate((P11,P12),axis=1)
-        Plower = np.concatenate((P21,P22), axis=1)
-        P = np.concatenate((Pupper,Plower),axis=0) # persona-influence matrix P
-        
-        # define diagonal degree matrices 
-        D11 = np.diag(np.sum(W1,1)) # degree matrix for nodes of type 1 connected with other nodes of type 1
-        D22 = np.diag(np.sum(W2,1))
-        D12 = np.diag(np.sum(W3,1)) # degree matrix for nodes of type 1 connected with nodes of type 2
-        D21 = np.diag(np.sum(W3,0)) # degree matrix for nodes of type 2 connected with nodes of type 1
-        
-        # construct Q from D's and H's 
-        Q1 = (ep/k)**2 * (np.kron(D11, np.matmul(H1,np.transpose(H1)))) + (ep**2/(k*k)) * (np.kron(D12, np.matmul(H3, np.transpose(H3))))
-        Q2 = (ep/k)**2 * (np.kron(D22, np.matmul(H2,np.transpose(H2)))) + (ep**2/(k*k)) * (np.kron(D21, np.matmul(np.transpose(H3), H3)))
-        # Q1 = eye(N1*k1) + (ep/k1)**2 * (np.kron(D11, np.matmul(H1,np.transpose(H1)))) + (ep**2/(k1*k2)) * (np.kron(D12, np.matmul(H3, np.transpose(H3))))
-        # Q2 = eye(N2*k2) + (ep/k2)**2 * (np.kron(D22, np.matmul(np.transpose(H2),H2))) + (ep**2/(k2*k1)) * (np.kron(D21, np.matmul(np.transpose(H3), H3)))
-        Qupper = np.concatenate((Q1,csr_matrix((N1*k,N2*k)).toarray()),axis=1)
-        Qlower = np.concatenate((csr_matrix((N2*k,N1*k)).toarray(),Q2), axis=1)
-        Q = np.concatenate((Qupper,Qlower),axis=0)
-        Q = csr_matrix(Q).toarray()
-        
-        # # calculate maximal value of epsilon that guarantees convergence
-        # # construct P (for 2 node types and 3 edges types) for ep = 1
-        # ep = 1
-        # P11_ = (ep/k1) * (np.kron(W1,H1))
-        # P12_ = (ep/k1) * (np.kron(W3,H3))
-        # P21_ = (ep/k2) * (np.kron(np.transpose(W3),np.transpose(H3)))
-        # P22_ = (ep/k2) * (np.kron(W2,H2))
-        # Pupper_ = np.concatenate((P11_,P12_),axis=1)
-        # Plower_ = np.concatenate((P21_,P22_), axis=1)
-        # P_ = np.concatenate((Pupper_,Plower_),axis=0) # persona-influence matrix P'
-        
-        # Q1_ = (ep/k1)**2 * (np.kron(D11, np.matmul(H1,np.transpose(H1)))) + (ep**2/(k1*k2)) * (np.kron(D12, np.matmul(H3,np.transpose(H3))))
-        # Q2_ = (ep/k2)**2 * (np.kron(D22, np.matmul(H2,np.transpose(H2)))) + (ep**2/(k2*k1)) * (np.kron(D21, np.matmul(H3,np.transpose(H3))))
-        # Qupper_ = np.concatenate((Q1_,csr_matrix((N1*k1,N2*k2)).toarray()),axis=1)
-        # Qlower_ = np.concatenate((csr_matrix((N2*k2,N1*k1)).toarray(),Q2_), axis=1)
-        # Q_ = np.concatenate((Qupper_,Qlower_),axis=0)
-        # Q_ = csr_matrix(Q_).toarray()
-        
-        # P_norm = np.linalg.norm(P_)
-        # Q_norm = np.linalg.norm(Q_)
-        # eps_convergence = (-P_norm + np.sqrt(P_norm**2 + 4*(Q_norm**2)))/(2*Q_norm)
-        # print('recommended to choose ep between:', 0.01*eps_convergence, 'and', 0.1*eps_convergence)
-        
-        M = P - Q 
+        Wupper=sparse.hstack([W1,W3])
+        Wlower=sparse.hstack([W2,W3.transpose()])
+        W_tot=sparse.vstack([Wupper,Wlower])
 
         
+        if verbose==True:
+            print("W_tot took {:.3f}".format(time.time()-start)+" seconds to initialize")
+            print("")
+            
+        # estimate potential matrices H via Linear Compatibility Estimation (LCE)
+        # H1: combi-combi, H2: Lidar-lidar, H3: combi-lidar edges
+        
+        start=time.time()
+        
+        H_total = csr_matrix(estimateH(E=E_tot, W=W_tot, k=k, method='LHE'))  
+        H1 = H_total.transpose()[0:k,0:k]
+        H2 = H_total[k:,k:]
+        H3 = H_total[0:k,k:]
+
+        if verbose==True:
+            print("EstimateH took {:.3f}".format(time.time()-start)+" seconds")
+            print("")
+        
+        # construct P (for 2 node types and 3 edges types)
+        start=time.time()
+        
+        P11 = (ep/k) * (sparse.kron(W1,H1))
+        P12 = (ep/k) * (sparse.kron(W3,H3))
+        P21 = (ep/k) * (sparse.kron(W3.transpose(),H3.transpose()))
+        P22 = (ep/k) * (sparse.kron(W2,H2))
+        
+        Pupper = sparse.hstack([P11,P12])
+        Plower = sparse.hstack([P21,P22])
+        P = sparse.vstack([Pupper,Plower])
+        
+        if verbose==True:
+            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")
+            print("------------------------------------------------------------------------")
+            
+        start=time.time()
+        
+        D11 = csr_matrix(diags(np.asarray(np.sum(W1,1)).squeeze()))
+        D22 = csr_matrix(diags(np.asarray(np.sum(W2,1)).squeeze()))
+        D12 = csr_matrix(diags(np.asarray(np.sum(W3,1)).squeeze()))
+        D21 = csr_matrix(diags(np.asarray(np.sum(W3,0)).squeeze()))
+        if verbose==True:
+            print("D {:.3f}".format(time.time()-start)+" seconds")
+        # construct Q from D's and H's 
+        
+        start=time.time()
+        
+        Q1 = (ep/k)**2 * sparse.kron(D11, H1@H1.transpose()) + (ep**2/(k*k) * sparse.kron(D12,H3@H3.transpose()))
+        Q2 = (ep/k)**2 * sparse.kron(D22, H2@H2.transpose()) + (ep**2/(k*k) * sparse.kron(D21,H3.transpose()@H3))
+        
+        Qupper=sparse.hstack([Q1,csr_matrix((N1*k,N2*k))])
+        Qlower=sparse.hstack([csr_matrix((N2*k,N1*k)),Q2])
+        Q = sparse.vstack([Qupper,Qlower])
+        if verbose==True:
+            print("Q {:.3f}".format(time.time()-start)+" seconds")
+        
+        start=time.time()
+        M = P - Q
+        if verbose==True:
+            print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
+            print("")
+#%%     If statement
     else:
+        
+#%%     Calculate E, W, H, P and Q for full overlap      
         # in case of homogeneous graph: only one W and one H
         # estimate potential matrix H via Linear Compatibility Estimation
-        H_total = estimateSingleH(E=E, W=W, k=k, method='LHE')
-        H = np.transpose(H_total[0:k,0:k])
+        start=time.time()
         
+        H_total = estimateSingleH(E=csr_matrix(E), W=W, k=k, method='LHE')
+        H = csr_matrix(np.transpose(H_total[0:k,0:k]))
+        
+        if verbose==True:
+            print("EstimateH took {:.3f}".format(time.time()-start)+" seconds")
+            print("")
+
+
         # construct persona-influence matrix P
-        P = (ep/k) * (np.kron(W,H))
+
+        start=time.time()
         
+        P=(ep/k)*sparse.kron(W,H)
+        
+        if verbose==True:
+            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")   
+            print("------------------------------------------------------------------------")
+
         # define diagonal degree matrix D 
-        D = np.diag(np.sum(W,1)) # degree matrix for nodes of type 1 connected with other nodes of type 1
+        start=time.time()
+        D = csr_matrix(diags(np.asarray(np.sum(W,1)).squeeze())) # degree matrix for nodes of type 1 connected with other nodes of type 1
+        if verbose==True:
+            print("D {:.3f}".format(time.time()-start)+" seconds")
         
-        # construct Q from D and H 
-        Q = (ep/k)**2 * np.kron(H**2,D)
+        # construct Q from D and H
+        start=time.time()
+        Q=(ep/k)**2*sparse.kron(H**2,D)
+        if verbose==True:
+            print("Q {:.3f}".format(time.time()-start)+" seconds")
         
-        # # calculate maximal value of epsilon that guarantees convergence
-        # # construct P (for 2 node types and 3 edges types) for ep = 1
-        # ep = 1
-        # P11_ = (ep/k1) * (np.kron(W1,H1))
-        # P12_ = (ep/k1) * (np.kron(W3,H3))
-        # P21_ = (ep/k2) * (np.kron(np.transpose(W3),np.transpose(H3)))
-        # P22_ = (ep/k2) * (np.kron(W2,H2))
-        # Pupper_ = np.concatenate((P11_,P12_),axis=1)
-        # Plower_ = np.concatenate((P21_,P22_), axis=1)
-        # P_ = np.concatenate((Pupper_,Plower_),axis=0) # persona-influence matrix P'
-        
-        # Q1_ = (ep/k1)**2 * (np.kron(D11, np.matmul(H1,np.transpose(H1)))) + (ep**2/(k1*k2)) * (np.kron(D12, np.matmul(H3,np.transpose(H3))))
-        # Q2_ = (ep/k2)**2 * (np.kron(D22, np.matmul(H2,np.transpose(H2)))) + (ep**2/(k2*k1)) * (np.kron(D21, np.matmul(H3,np.transpose(H3))))
-        # Qupper_ = np.concatenate((Q1_,csr_matrix((N1*k1,N2*k2)).toarray()),axis=1)
-        # Qlower_ = np.concatenate((csr_matrix((N2*k2,N1*k1)).toarray(),Q2_), axis=1)
-        # Q_ = np.concatenate((Qupper_,Qlower_),axis=0)
-        # Q_ = csr_matrix(Q_).toarray()
-        
-        # P_norm = np.linalg.norm(P_)
-        # Q_norm = np.linalg.norm(Q_)
-        # eps_convergence = (-P_norm + np.sqrt(P_norm**2 + 4*(Q_norm**2)))/(2*Q_norm)
-        # print('recommended to choose ep between:', 0.01*eps_convergence, 'and', 0.1*eps_convergence)
-        
+        start=time.time()
         M = P - Q 
-    
-    #iteratively update final beliefs B
+        if verbose==True:
+            print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
+            print("")
+#%%     Solve for B     
+        #iteratively update final beliefs B
     maxIter = 50
     res = 1; iter=0;
     res_history=[];
-    
+    e=csr_matrix(e)
+    b = csr_matrix(b)
     while res>1e-8:
         b_old = b
-        b = e + np.matmul(M,b_old)
-        res = np.sum(np.sum(np.absolute(b_old-b)))
+        
+        b=e+M@b_old
+        res = np.sum(np.absolute(b_old-b))
         res_history.append(res)
         iter = iter+1
         if iter == maxIter:
             break
-    #print('nr of iterations:', iter)
+        # print('nr of iterations:', iter)
     
     # extract final beliefs 
     finalBeliefs = np.transpose(np.reshape(b,(k, X.shape[0]), order='F'))
