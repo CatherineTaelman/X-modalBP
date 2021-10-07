@@ -263,7 +263,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         
         start=time.time()
         
-        H_total = csr_matrix(estimateH(E=E_tot, W=W_tot, k=k, method='LHE'))  
+        H_total = csr_matrix(estimateH(E=csr_matrix(E_tot), W=W_tot, k=k, method='LHE'))  
         H1 = H_total.transpose()[0:k,0:k]
         H2 = H_total[k:,k:]
         H3 = H_total[0:k,k:]
@@ -273,21 +273,6 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
             print("")
         
         # construct P (for 2 node types and 3 edges types)
-        start=time.time()
-        
-        P11 = (ep/k) * (sparse.kron(W1,H1))
-        P12 = (ep/k) * (sparse.kron(W3,H3))
-        P21 = (ep/k) * (sparse.kron(W3.transpose(),H3.transpose()))
-        P22 = (ep/k) * (sparse.kron(W2,H2))
-        
-        Pupper = sparse.hstack([P11,P12])
-        Plower = sparse.hstack([P21,P22])
-        P = sparse.vstack([Pupper,Plower])
-        
-        if verbose==True:
-            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")
-            print("------------------------------------------------------------------------")
-            
         start=time.time()
         
         D11 = csr_matrix(diags(np.asarray(np.sum(W1,1)).squeeze()))
@@ -306,14 +291,35 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         Qupper=sparse.hstack([Q1,csr_matrix((N1*k,N2*k))])
         Qlower=sparse.hstack([csr_matrix((N2*k,N1*k)),Q2])
         Q = sparse.vstack([Qupper,Qlower])
+        Q = Q.tocsr()
         if verbose==True:
             print("Q {:.3f}".format(time.time()-start)+" seconds")
         
         start=time.time()
-        M = P - Q
+        
+        P11 = (ep/k) * (sparse.kron(W1,H1))
+        P12 = (ep/k) * (sparse.kron(W3,H3))
+        P21 = (ep/k) * (sparse.kron(W3.transpose(),H3.transpose()))
+        P22 = (ep/k) * (sparse.kron(W2,H2))
+        
+        Pupper = sparse.hstack([P11,P12])
+        del P11,P12
+        Plower = sparse.hstack([P21,P22])
+        del P21,P22
+        M = sparse.vstack([Pupper,Plower])-Q
+        M = M.tocsr()
+        
         if verbose==True:
-            print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
-            print("")
+            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")
+            print("------------------------------------------------------------------------")
+            
+        
+        
+        # start=time.time()
+        # M = P - Q
+        # if verbose==True:
+        #     print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
+        #     print("")
 #%%     If statement
     else:
         
@@ -332,14 +338,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
 
         # construct persona-influence matrix P
 
-        start=time.time()
         
-        P=(ep/k)*sparse.kron(W,H)
-        
-        if verbose==True:
-            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")   
-            print("------------------------------------------------------------------------")
-
         # define diagonal degree matrix D 
         start=time.time()
         D = csr_matrix(diags(np.asarray(np.sum(W,1)).squeeze())) # degree matrix for nodes of type 1 connected with other nodes of type 1
@@ -349,21 +348,30 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         # construct Q from D and H
         start=time.time()
         Q=(ep/k)**2*sparse.kron(H**2,D)
+        Q=Q.tocsr()
         if verbose==True:
             print("Q {:.3f}".format(time.time()-start)+" seconds")
         
         start=time.time()
-        M = P - Q 
+        
+        M = (ep/k)*sparse.kron(W,H)-Q
+        M = M.tocsr()
         if verbose==True:
-            print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
-            print("")
+            print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")   
+            print("------------------------------------------------------------------------")
+
+        
+        # start=time.time()
+        # M = P - Q 
+        # if verbose==True:
+        #     print("P-Q:{:.3f}".format(time.time()-start)+" seconds")
+        #     print("")
 #%%     Solve for B     
         #iteratively update final beliefs B
     maxIter = 50
     res = 1; iter=0;
     res_history=[];
     e=csr_matrix(e)
-    b = csr_matrix(b)
     while res>1e-8:
         b_old = b
         
