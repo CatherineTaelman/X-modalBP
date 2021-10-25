@@ -41,7 +41,7 @@ from sys import getsizeof
 def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_spa, r, choice, fraction=0.8,):
     assert len(X) == len(y), 'X and y must have same length'
     
-    verbose=False # Set to True for time stamps
+    verbose=True # Set to True for time stamps
 
 #%% Split data coords vs rest. Define GT
     if choice != 'full overlap':
@@ -307,7 +307,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         Plower = sparse.hstack([P21,P22])
         del P21,P22
         M = sparse.vstack([Pupper,Plower])-Q
-        M = M.tocsr()
+        # M = M.tocsr()
         
         if verbose==True:
             print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")
@@ -355,7 +355,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
         start=time.time()
         
         M = (ep/k)*sparse.kron(W,H)-Q
-        M = M.tocsr()
+        # M = M.tocsr()
         if verbose==True:
             print("sparsekron took {:.3f}".format(time.time()-start)+" seconds")   
             print("------------------------------------------------------------------------")
@@ -371,7 +371,7 @@ def label_propagation(X, y, X_total, k, dimHS, dimLidar, kNN, ep, sig_spe, sig_s
     maxIter = 50
     res = 1; iter=0;
     res_history=[];
-    e=csr_matrix(e)
+    # e=csr_matrix(e)
     while res>1e-8:
         b_old = b
         
